@@ -1,0 +1,132 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: postgres
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mydb}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+    command:
+      - "postgres"
+      # --------------------------------------------------------------------
+      # Connection Settings
+      # --------------------------------------------------------------------
+      - "-c"
+      - "max_connections=${POSTGRES_MAX_CONNECTIONS:-200}"
+      - "-c"
+      - "superuser_reserved_connections=3"
+      # --------------------------------------------------------------------
+      # Memory (tuned for 4-8GB available to PostgreSQL)
+      # --------------------------------------------------------------------
+      - "-c"
+      - "shared_buffers=${POSTGRES_SHARED_BUFFERS:-1GB}"
+      - "-c"
+      - "effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-3GB}"
+      - "-c"
+      - "work_mem=${POSTGRES_WORK_MEM:-16MB}"
+      - "-c"
+      - "maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM:-256MB}"
+      # --------------------------------------------------------------------
+      # WAL & Checkpoint
+      # --------------------------------------------------------------------
+      - "-c"
+      - "wal_buffers=64MB"
+      - "-c"
+      - "min_wal_size=1GB"
+      - "-c"
+      - "max_wal_size=4GB"
+      - "-c"
+      - "checkpoint_completion_target=0.9"
+      # --------------------------------------------------------------------
+      # Query Planner
+      # --------------------------------------------------------------------
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "effective_io_concurrency=200"
+      - "-c"
+      - "default_statistics_target=100"
+      # --------------------------------------------------------------------
+      # Parallel Query
+      # --------------------------------------------------------------------
+      - "-c"
+      - "max_worker_processes=8"
+      - "-c"
+      - "max_parallel_workers_per_gather=4"
+      - "-c"
+      - "max_parallel_workers=8"
+      - "-c"
+      - "max_parallel_maintenance_workers=4"
+      # --------------------------------------------------------------------
+      # Logging
+      # --------------------------------------------------------------------
+      - "-c"
+      - "logging_collector=on"
+      - "-c"
+      - "log_directory=log"
+      - "-c"
+      - "log_filename=postgresql-%Y-%m-%d.log"
+      - "-c"
+      - "log_rotation_age=1d"
+      - "-c"
+      - "log_rotation_size=100MB"
+      - "-c"
+      - "log_min_duration_statement=${POSTGRES_LOG_MIN_DURATION:-1000}"
+      - "-c"
+      - "log_checkpoints=on"
+      - "-c"
+      - "log_connections=off"
+      - "-c"
+      - "log_disconnections=off"
+      - "-c"
+      - "log_lock_waits=on"
+      - "-c"
+      - "log_temp_files=0"
+      # --------------------------------------------------------------------
+      # Statement Timeout
+      # --------------------------------------------------------------------
+      - "-c"
+      - "statement_timeout=${POSTGRES_STATEMENT_TIMEOUT:-30000}"
+      - "-c"
+      - "idle_in_transaction_session_timeout=60000"
+      # --------------------------------------------------------------------
+      # Security
+      # --------------------------------------------------------------------
+      - "-c"
+      - "password_encryption=scram-sha-256"
+      - "-c"
+      - "listen_addresses=*"
+    deploy:
+      resources:
+        limits:
+          memory: ${POSTGRES_MEMORY_LIMIT:-6G}
+        reservations:
+          memory: ${POSTGRES_MEMORY_RESERVATION:-3G}
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    shm_size: "256mb"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-mydb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_data:
+    driver: local
